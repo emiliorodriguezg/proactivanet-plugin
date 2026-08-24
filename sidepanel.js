@@ -142,6 +142,32 @@ async function usuarioActivo() {
       target: { tabId: tab.id, frameIds: [0] },
       func: (appUrl) =>
         new Promise((resolve) => {
+          // Sondeo en vez de espera fija: cuánto tarda la SPA en arrancar
+          // dentro del iframe varía (justo tras recargar la extensión, o
+          // con carga del servidor, puede tardar más de los 2.5s fijos que
+          // había antes -- confirmado en real 2026-08-24: a los 4s
+          // menuTop.paw ya existía como frame pero su contenido interno
+          // -- el botón -- aún no estaba listo). Comprueba cada 300ms hasta
+          // 8s antes de rendirse.
+          const esperarHasta = (comprobar, maxMs) =>
+            new Promise((res) => {
+              const t0 = Date.now();
+              const tick = () => {
+                let valor;
+                try {
+                  valor = comprobar();
+                } catch {
+                  valor = null;
+                }
+                if (valor || Date.now() - t0 > maxMs) {
+                  res(valor || null);
+                } else {
+                  setTimeout(tick, 300);
+                }
+              };
+              tick();
+            });
+
           const ifr = document.createElement("iframe");
           ifr.style.display = "none";
           // sandbox SIN allow-top-navigation/allow-popups: ProactivaNet
@@ -152,37 +178,43 @@ async function usuarioActivo() {
           // se mantiene para que las cookies de sesión y el acceso a
           // contentDocument sigan funcionando.
           ifr.sandbox = "allow-scripts allow-same-origin";
-          ifr.onload = () => {
-            setTimeout(() => {
-              try {
-                const doc = ifr.contentDocument;
-                const menuTopFrame = Array.from(doc.querySelectorAll("iframe,frame")).find((f) =>
-                  (f.src || "").includes("menuTop.paw")
-                );
-                const menuDoc = menuTopFrame && menuTopFrame.contentDocument;
-                const btn = menuDoc && menuDoc.querySelector("#pawTheUserInfoBtn");
-                if (!btn) {
-                  resolve(null);
-                  ifr.remove();
-                  return;
-                }
-                btn.click();
-                setTimeout(() => {
-                  const leer = (etiqueta) => {
-                    const td = menuDoc.querySelector(`td[paw\\:rowlabel="${etiqueta}"]`);
-                    const span = td && td.nextElementSibling && td.nextElementSibling.querySelector(".pawDFTexView");
-                    return ((span && span.textContent) || "").trim();
-                  };
-                  const correo = leer("Email");
-                  const usuario = leer("Nombre completo") || leer("Nombre de usuario");
-                  resolve(correo ? { correo, usuario } : null);
-                  ifr.remove();
-                }, 1500);
-              } catch {
-                resolve(null);
-                ifr.remove();
-              }
-            }, 2500);
+          ifr.onload = async () => {
+            const doc = ifr.contentDocument;
+            const buscarMenuDoc = () => {
+              const menuTopFrame = Array.from(doc.querySelectorAll("iframe,frame")).find((f) =>
+                (f.src || "").includes("menuTop.paw")
+              );
+              return menuTopFrame && menuTopFrame.contentDocument;
+            };
+            const btn = await esperarHasta(() => {
+              const menuDoc = buscarMenuDoc();
+              return menuDoc && menuDoc.querySelector("#pawTheUserInfoBtn");
+            }, 8000);
+            if (!btn) {
+              resolve(null);
+              ifr.remove();
+              return;
+            }
+            btn.click();
+            const correo = await esperarHasta(() => {
+              const menuDoc = buscarMenuDoc();
+              const td = menuDoc && menuDoc.querySelector('td[paw\\:rowlabel="Email"]');
+              const span = td && td.nextElementSibling && td.nextElementSibling.querySelector(".pawDFTexView");
+              return ((span && span.textContent) || "").trim() || null;
+            }, 5000);
+            if (correo) {
+              const menuDoc = buscarMenuDoc();
+              const leer = (etiqueta) => {
+                const td = menuDoc.querySelector(`td[paw\\:rowlabel="${etiqueta}"]`);
+                const span = td && td.nextElementSibling && td.nextElementSibling.querySelector(".pawDFTexView");
+                return ((span && span.textContent) || "").trim();
+              };
+              const usuario = leer("Nombre completo") || leer("Nombre de usuario");
+              resolve({ correo, usuario });
+            } else {
+              resolve(null);
+            }
+            ifr.remove();
           };
           ifr.src = appUrl;
           document.body.appendChild(ifr);
