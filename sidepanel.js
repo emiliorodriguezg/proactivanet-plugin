@@ -202,6 +202,7 @@ async function usuarioActivo() {
               const span = td && td.nextElementSibling && td.nextElementSibling.querySelector(".pawDFTexView");
               return ((span && span.textContent) || "").trim() || null;
             }, 5000);
+            let usuario = null;
             if (correo) {
               const menuDoc = buscarMenuDoc();
               const leer = (etiqueta) => {
@@ -209,11 +210,30 @@ async function usuarioActivo() {
                 const span = td && td.nextElementSibling && td.nextElementSibling.querySelector(".pawDFTexView");
                 return ((span && span.textContent) || "").trim();
               };
-              const usuario = leer("Nombre completo") || leer("Nombre de usuario");
-              resolve({ correo, usuario });
-            } else {
-              resolve(null);
+              usuario = leer("Nombre completo") || leer("Nombre de usuario");
             }
+            // ProactivaNet recuerda el panel actual A NIVEL DE SESIÓN en el
+            // servidor, no solo en este DOM -- si no se pulsa "Atrás" antes
+            // de descartar el iframe, la próxima vez que la pestaña REAL
+            // recargue menuTop.paw el servidor le sirve el mismo panel de
+            // usuario que dejamos aquí, esta vez visible de verdad
+            // (confirmado en real 2026-08-24: navegar a otra web y volver a
+            // ProactivaNet mostraba el panel). Se pulsa SIEMPRE que se hizo
+            // clic en el botón, haya ido bien la lectura del correo o no.
+            try {
+              const menuDoc = buscarMenuDoc();
+              const atras = menuDoc
+                ? Array.from(menuDoc.querySelectorAll("*")).find((el) => el.textContent.trim() === "Atrás" && el.children.length === 0)
+                : null;
+              if (atras) {
+                (atras.closest("a,button,[paw\\:ctrl]") || atras).click();
+                // Da tiempo a que la petición de "Atrás" llegue al servidor
+                // antes de quitar el iframe -- si se retira antes, se
+                // cancela la petición en curso y no sirve de nada.
+                await new Promise((r) => setTimeout(r, 800));
+              }
+            } catch {}
+            resolve(correo ? { correo, usuario } : null);
             ifr.remove();
           };
           ifr.src = appUrl;
