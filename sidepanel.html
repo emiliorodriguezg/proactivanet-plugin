@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Incidencias similares</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+<div id="version-banner" class="version-banner" hidden>
+  Hay una versión nueva del plugin disponible.
+  <a id="version-link" href="#" target="_blank" rel="noopener">Descárgala aquí</a>
+</div>
+<nav id="menu">
+  <button data-view="escaner" class="active">Escáner</button>
+  <button data-open="/incidencias">Monitor</button>
+  <button data-open="/buscar">Buscar</button>
+  <button data-open="/">Estadísticas</button>
+  <button data-view="config" class="btn-icono" title="Configuración">&#9881;</button>
+</nav>
+
+<div id="view-escaner" class="view active">
+  <div class="filtro">
+    <input id="esc-codigo" type="text" placeholder="Código (REQ/INC AAAA-NNNNNN)">
+    <button id="esc-buscar">Buscar</button>
+  </div>
+  <div id="escaner-status" class="status"></div>
+  <div id="escaner-list"></div>
+</div>
+
+<div id="view-config" class="view">
+  <label for="cfg-servidor">Servidor (host:puerto o URL)</label>
+  <input id="cfg-servidor" type="text" placeholder="127.0.0.1:8010">
+  <label class="cfg-check"><input type="checkbox" id="cfg-autodetectar"> Autorefresco / autodetección del servidor</label>
+  <label for="cfg-token" style="margin-top:10px">Token de acceso</label>
+  <input id="cfg-token" type="password" placeholder="Facilitado por el administrador">
+  <button id="cfg-guardar">Guardar</button>
+  <div id="cfg-status" class="status"></div>
+</div>
+
+<script src="sidepanel.js"></script>
+</body>
+</html>
