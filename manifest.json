@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Extensión de Proactivanet",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Muestra incidencias similares y resumen IA para la incidencia abierta en ProactivaNet.",
   "permissions": ["sidePanel", "storage", "tabs", "webNavigation", "scripting"],
   "host_permissions": ["http://*/*", "https://*/*"],
