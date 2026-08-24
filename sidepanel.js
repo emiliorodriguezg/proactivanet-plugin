@@ -363,6 +363,11 @@ document.getElementById("menu").addEventListener("click", async (e) => {
 });
 
 async function init() {
+  // Descubrir el servidor ANTES de rellenar el campo -- en una instalación
+  // nueva (sin nada en storage todavía), rellenarlo antes mostraba el
+  // valor por defecto (127.0.0.1:8010) durante la primera apertura, aunque
+  // el autodescubrimiento lo corrigiera un instante después por debajo.
+  await actualizarServidorDesdeDescubrimiento();
   document.getElementById("cfg-servidor").value = await getServidor();
   document.getElementById("cfg-token").value = await getToken();
   const { autodetectar } = await chrome.storage.local.get("autodetectar");
