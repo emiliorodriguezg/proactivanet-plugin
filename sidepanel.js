@@ -367,6 +367,7 @@ async function init() {
   document.getElementById("cfg-token").value = await getToken();
   const { autodetectar } = await chrome.storage.local.get("autodetectar");
   document.getElementById("cfg-autodetectar").checked = autodetectar !== false;
+  document.getElementById("cfg-version").textContent = `Versión instalada: ${chrome.runtime.getManifest().version}`;
   comprobarVersion();
   cargarEscaner();
   chrome.tabs.onActivated.addListener(() => cargarEscaner());
