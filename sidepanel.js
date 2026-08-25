@@ -297,13 +297,15 @@ async function guidActivo() {
   return null;
 }
 
-async function buscarPorUrl(url, etiquetaError) {
+async function buscarPorUrl(url, etiquetaError, resumenEstadoUrl) {
   // El servidor devuelve el HTML de las tarjetas ya construido -- el plugin
   // solo lo inyecta, sin plantilla propia (ver web/app.py: _similares_card_html).
   const status = document.getElementById("escaner-status");
   const list = document.getElementById("escaner-list");
+  const tipo = document.getElementById("esc-tipo-busqueda");
   status.textContent = "Cargando…";
   list.innerHTML = "";
+  tipo.hidden = true;
   const servidor = await getServidor();
   try {
     const res = await fetchApi(url, servidor);
@@ -318,6 +320,23 @@ async function buscarPorUrl(url, etiquetaError) {
     if (!res.ok) throw new Error(String(res.status));
     status.textContent = "";
     list.innerHTML = await res.text();
+    // Aviso de si el ticket buscado tiene resumen IA -- si lo tiene,
+    // generar_embeddings.py usó ese texto (más limpio) en vez del crudo
+    // para calcular su similitud (ver MEMORIA_PROYECTO.md 2026-08-24). Solo
+    // se avisa del caso "sí" -- silencio si no lo tiene, no hace falta
+    // señalar el caso por defecto.
+    if (resumenEstadoUrl) {
+      try {
+        const r2 = await fetchApi(resumenEstadoUrl, servidor);
+        if (r2.ok) {
+          const { tiene_resumen } = await r2.json();
+          if (tiene_resumen) {
+            tipo.textContent = "Con resumen IA";
+            tipo.hidden = false;
+          }
+        }
+      } catch {}
+    }
   } catch (err) {
     status.textContent = `Error conectando con el servidor (${servidor}): ${err.message}`;
   }
@@ -336,7 +355,11 @@ async function buscarPorGuid(guid) {
   } catch {
     // si falla, seguimos igualmente a por los similares
   }
-  return buscarPorUrl(`/api/incidencias/${encodeURIComponent(guid)}/similares/html`, "Esta incidencia");
+  return buscarPorUrl(
+    `/api/incidencias/${encodeURIComponent(guid)}/similares/html`,
+    "Esta incidencia",
+    `/api/incidencias/${encodeURIComponent(guid)}/resumen-estado`
+  );
 }
 
 function buscarPorCodigo(codigo) {
@@ -344,7 +367,11 @@ function buscarPorCodigo(codigo) {
     document.getElementById("escaner-status").textContent = "Introduce un código de incidencia.";
     return;
   }
-  return buscarPorUrl(`/api/incidencias/por-codigo/${encodeURIComponent(codigo)}/similares/html`, `"${codigo}"`);
+  return buscarPorUrl(
+    `/api/incidencias/por-codigo/${encodeURIComponent(codigo)}/similares/html`,
+    `"${codigo}"`,
+    `/api/incidencias/por-codigo/${encodeURIComponent(codigo)}/resumen-estado`
+  );
 }
 
 async function cargarEscaner() {
@@ -357,6 +384,7 @@ async function cargarEscaner() {
     document.getElementById("escaner-status").textContent =
       "No se detectó ninguna incidencia en la página. Introduce el código y pulsa Buscar.";
     document.getElementById("escaner-list").innerHTML = "";
+    document.getElementById("esc-tipo-busqueda").hidden = true;
   }
 }
 
