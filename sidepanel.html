@@ -14,19 +14,36 @@
 <nav id="menu">
   <button data-view="escaner" class="active">Escáner</button>
   <button data-open="/incidencias">Monitor</button>
-  <button data-open="/buscar">Buscar</button>
   <button data-open="/">Estadísticas</button>
-  <button data-view="config" class="btn-icono" title="Configuración">&#9881;</button>
+  <button data-open="/buscar" class="btn-icono" title="Buscar incidencias"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align:-2px"><rect x="2.5" y="3" width="6" height="4.5" rx="2"></rect><rect x="15.5" y="3" width="6" height="4.5" rx="2"></rect><rect x="1.5" y="6.5" width="8" height="13.5" rx="3"></rect><rect x="14.5" y="6.5" width="8" height="13.5" rx="3"></rect><rect x="8.5" y="10" width="7" height="3.5" rx="1"></rect></svg></button>
+  <button data-view="asistente" class="btn-icono" title="Asistente IA">&#10024;</button>
+  <button data-view="config" class="btn-icono" title="Configuración">&#9881;&#65039;</button>
 </nav>
 
 <div id="view-escaner" class="view active">
   <div class="filtro">
     <input id="esc-codigo" type="text" placeholder="Código (REQ/INC AAAA-NNNNNN)">
-    <button id="esc-buscar">Buscar</button>
+    <button id="esc-buscar" title="Buscar"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="vertical-align:-3px"><rect x="2.5" y="3" width="6" height="4.5" rx="2"></rect><rect x="15.5" y="3" width="6" height="4.5" rx="2"></rect><rect x="1.5" y="6.5" width="8" height="13.5" rx="3"></rect><rect x="14.5" y="6.5" width="8" height="13.5" rx="3"></rect><rect x="8.5" y="10" width="7" height="3.5" rx="1"></rect></svg></button>
+    <button id="esc-detalle" title="Ver detalles">&#128269;</button>
   </div>
   <div id="esc-tipo-busqueda" class="tipo-busqueda" hidden></div>
   <div id="escaner-status" class="status"></div>
   <div id="escaner-list"></div>
+</div>
+
+<div id="view-asistente" class="view">
+  <div class="asistente-intro">Describe tu problema o duda y te propondremos una solución basada en incidencias similares ya resueltas.</div>
+  <textarea id="ast-texto" placeholder="Escribe aquí tu problema o pregunta..."></textarea>
+  <button id="ast-buscar" title="Asistente IA">&#10024; IA</button>
+  <div id="ast-espera" class="status" hidden>Buscando una respuesta, puede tardar unos segundos. Gracias por tu paciencia...</div>
+  <div id="ast-solucion-wrap" hidden>
+    <label>Solución propuesta</label>
+    <textarea id="ast-solucion" readonly></textarea>
+  </div>
+  <div id="ast-similares-wrap" hidden>
+    <label>Incidencias de referencia</label>
+    <div id="ast-similares-list"></div>
+  </div>
 </div>
 
 <div id="view-config" class="view">
