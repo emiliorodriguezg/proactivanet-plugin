@@ -113,6 +113,12 @@ async function fetchApi(path, servidor) {
   return fetch(`${baseUrl(servidor)}${path}`, { headers });
 }
 
+async function postApi(path, servidor, body) {
+  const token = await getToken();
+  const headers = { "Content-Type": "application/json", ...(token ? { "X-Plugin-Token": token } : {}) };
+  return fetch(`${baseUrl(servidor)}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+}
+
 // Abre una página propia (Monitor/Buscar/Estadísticas/Ver detalles). La
 // cookie de sesión ya está en el navegador antes de este punto -- la puso
 // asegurarSesion() al cargar el Escáner (ver cargarEscaner), así que la
@@ -262,8 +268,13 @@ async function asegurarSesion() {
   const ahora = Date.now();
   const { sesionTs } = await chrome.storage.local.get("sesionTs");
   if (sesionTs && ahora - sesionTs < SESION_TTL_CACHE_MS) return;
-  const usuario = await usuarioActivo();
-  if (!usuario) return;
+  // usuarioActivo() devuelve null si no hay VPN/ProactivaNet accesible --
+  // antes eso cortaba aquí y Monitor/Buscar/Estadísticas se quedaban sin
+  // sesión. Desde 2026-08-25 se pide sesión igualmente, con correo vacío: el
+  // servidor la concede solo con el token válido (ver web/app.py:api_sesion),
+  // marcando el acceso como "sin verificar" en vez de rechazarlo -- así el
+  // plugin entero funciona sin VPN, no solo el Escáner.
+  const usuario = (await usuarioActivo()) || {};
   const [servidor, token] = await Promise.all([getServidor(), getToken()]);
   try {
     const res = await fetch(`${baseUrl(servidor)}/api/sesion`, {
@@ -414,6 +425,99 @@ document.getElementById("esc-buscar").addEventListener("click", () => {
 });
 document.getElementById("esc-codigo").addEventListener("keydown", (e) => {
   if (e.key === "Enter") buscarPorCodigo(document.getElementById("esc-codigo").value.trim());
+});
+
+// Botón "Ver detalles" del propio Escáner (junto al de Buscar) -- abre
+// directamente la ficha del código escrito, sin pasar por la lista de
+// similares. ProactivaNet no da el guid a partir del código (solo al
+// revés, ver guidActivo()), así que hace falta resolverlo primero contra
+// /api/incidencias/por-codigo/{codigo}.
+document.getElementById("esc-detalle").addEventListener("click", async () => {
+  const codigo = document.getElementById("esc-codigo").value.trim();
+  const status = document.getElementById("escaner-status");
+  if (!codigo) {
+    status.textContent = "Introduce un código de incidencia.";
+    return;
+  }
+  const servidor = await getServidor();
+  try {
+    const res = await fetchApi(`/api/incidencias/por-codigo/${encodeURIComponent(codigo)}`, servidor);
+    if (res.status === 404) {
+      status.textContent = `"${codigo}" no está todavía en la base de conocimiento.`;
+      return;
+    }
+    if (!res.ok) throw new Error(String(res.status));
+    const { guid } = await res.json();
+    abrirPagina(`/incidencias/${encodeURIComponent(guid)}`);
+  } catch (err) {
+    status.textContent = `Error conectando con el servidor (${servidor}): ${err.message}`;
+  }
+});
+
+// Asistente IA: RAG local (ver web/rag.py) -- ~15-20s de respuesta (2
+// llamadas secuenciales a Ollama en el servidor), de ahí el aviso de
+// espera explícito. La lista de similares solo se muestra si el propio
+// backend consideró que había una referencia real (tiene_similares) --
+// nunca se muestra "de adorno" si la solución fue el mensaje fijo de "no
+// puedo ayudarte".
+async function preguntarAsistente() {
+  const texto = document.getElementById("ast-texto").value.trim();
+  const boton = document.getElementById("ast-buscar");
+  const espera = document.getElementById("ast-espera");
+  const solucionWrap = document.getElementById("ast-solucion-wrap");
+  const similaresWrap = document.getElementById("ast-similares-wrap");
+  if (!texto) return;
+
+  boton.disabled = true;
+  espera.hidden = false;
+  solucionWrap.hidden = true;
+  similaresWrap.hidden = true;
+
+  const servidor = await getServidor();
+  try {
+    const res = await postApi("/api/asistente-ia", servidor, { texto });
+    if (res.status === 403) {
+      document.getElementById("ast-solucion").value = "Este equipo no está autorizado a usar el plugin.";
+      solucionWrap.hidden = false;
+      return;
+    }
+    if (!res.ok) throw new Error(String(res.status));
+    const data = await res.json();
+    document.getElementById("ast-solucion").value = data.solucion;
+    solucionWrap.hidden = false;
+    if (data.tiene_similares) {
+      document.getElementById("ast-similares-list").innerHTML = data.similares_html;
+      similaresWrap.hidden = false;
+    }
+  } catch (err) {
+    document.getElementById("ast-solucion").value = `Error conectando con el servidor (${servidor}): ${err.message}`;
+    solucionWrap.hidden = false;
+  } finally {
+    boton.disabled = false;
+    espera.hidden = true;
+  }
+}
+document.getElementById("ast-buscar").addEventListener("click", preguntarAsistente);
+
+document.getElementById("ast-similares-list").addEventListener("click", (e) => {
+  const btnIa = e.target.closest(".btn-ia");
+  if (btnIa) {
+    const ac = document.getElementById(`ac-${btnIa.dataset.guid}`);
+    ac.hidden = !ac.hidden;
+    return;
+  }
+  const btnAbrir = e.target.closest(".btn-abrir");
+  if (btnAbrir) {
+    const base = ultimaBaseProactivaNet || PROACTIVA_BASE_FALLBACK;
+    chrome.tabs.create({
+      url: `${base}servicedesk/incidents/formIncidents/formIncidents.paw?pawData=id%3D${btnAbrir.dataset.guid}`,
+    });
+    return;
+  }
+  const btnDetalle = e.target.closest(".btn-detalle");
+  if (btnDetalle) {
+    abrirPagina(`/incidencias/${encodeURIComponent(btnDetalle.dataset.guid)}`);
+  }
 });
 
 document.getElementById("cfg-guardar").addEventListener("click", async () => {
