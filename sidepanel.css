@@ -19,6 +19,7 @@ body {
 }
 .version-banner a { color: var(--bg); font-weight: 600; text-decoration: underline; }
 .version-actual { color: var(--sub); font-size: 11px; margin-top: 16px; text-align: center; }
+.tipo-busqueda { color: var(--teal); font-size: 11px; font-family: 'IBM Plex Mono', monospace; margin: 6px 0; }
 #menu { display: flex; gap: 6px; margin-bottom: 12px; }
 #menu button {
   flex: 1 1 auto; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-transform: uppercase;
