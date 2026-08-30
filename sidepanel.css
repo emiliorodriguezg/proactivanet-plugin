@@ -19,8 +19,30 @@ body {
 }
 .version-banner a { color: var(--bg); font-weight: 600; text-decoration: underline; }
 .version-actual { color: var(--sub); font-size: 11px; margin-top: 16px; text-align: center; }
-.tipo-busqueda { color: var(--teal); font-size: 11px; font-family: 'IBM Plex Mono', monospace; margin: 6px 0; }
-#menu { display: flex; gap: 6px; margin-bottom: 12px; }
+#menu-texto { display: flex; gap: 2px; margin-bottom: 6px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.menu-texto-item { position: relative; }
+.menu-texto-titulo {
+  font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; color: var(--sub); background: transparent;
+  border: none; padding: 5px 8px; cursor: pointer;
+}
+.menu-texto-titulo:hover, .menu-texto-titulo.abierto { color: var(--ink); background: var(--surface-2); }
+.menu-texto-dropdown {
+  position: absolute; top: 100%; left: 0; z-index: 10; min-width: 140px;
+  background: var(--surface); border: 1px solid var(--line); box-shadow: 0 4px 12px rgba(0,0,0,.4);
+  flex-direction: column; padding: 4px;
+}
+/* [hidden] tiene que ganar al display:flex de abajo -- una regla de clase
+   normal empata en especificidad con el [hidden] del navegador y gana por
+   venir despues en la hoja de estilos, dejando el desplegable siempre
+   visible (bug real, 2026-08-30, ver MEMORIA_PROYECTO.md). */
+.menu-texto-dropdown:not([hidden]) { display: flex; }
+.menu-texto-dropdown button {
+  text-align: left; font-family: 'IBM Plex Sans', sans-serif; font-size: 12.5px; color: var(--ink);
+  background: transparent; border: none; padding: 7px 8px; cursor: pointer;
+}
+.menu-texto-dropdown button:hover { background: var(--surface-2); color: var(--amber); }
+.menu-texto-separador { border-top: 1px solid var(--line); margin: 4px 2px; }
+#menu { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 12px; }
 #menu button {
   flex: 1 1 auto; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-transform: uppercase;
   letter-spacing: .05em; color: var(--sub); background: transparent; border: 1px solid var(--line);
@@ -54,6 +76,10 @@ body {
 .acordeon { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .acordeon .k { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--sub); text-transform: uppercase; margin-top: 6px; }
 .acordeon .v { font-size: 12.5px; margin-top: 2px; }
+.ticket-solucion { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--amber); padding: 10px; margin-bottom: 10px; }
+.ticket-solucion .k { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--sub); text-transform: uppercase; margin-top: 8px; }
+.ticket-solucion .k:first-child { margin-top: 0; }
+.ticket-solucion .v { font-size: 12.5px; margin-top: 2px; }
 .muted { color: var(--sub); }
 label { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-transform: uppercase; color: var(--sub); margin-bottom: 6px; }
 input[type="text"], input[type="password"] {
