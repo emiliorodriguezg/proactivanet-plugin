@@ -385,7 +385,7 @@ async function ingestarBajoDemanda(guid) {
     const res = await postApi(`/api/incidencias/${encodeURIComponent(guid)}/ingestar`, servidor, {});
     if (!res.ok) throw new Error(String(res.status));
     status.textContent =
-      "Estamos trabajando en incorporar esta incidencia (el gestor está ocupado) -- tu petición ha quedado en cola y estará disponible en unos minutos.";
+      "Estamos incorporando esta incidencia a la base de datos. El proceso puede tardar unos minutos. Gracias por tu paciencia mientras termina.";
   } catch (err) {
     status.textContent = `Error conectando con el servidor (${servidor}): ${err.message}`;
   }
