@@ -308,18 +308,22 @@ async function guidActivo() {
   return null;
 }
 
-async function buscarPorUrl(url, etiquetaError, resumenEstadoUrl) {
+async function buscarPorUrl(urlSimilares, urlSolucion, etiquetaError) {
   // El servidor devuelve el HTML de las tarjetas ya construido -- el plugin
-  // solo lo inyecta, sin plantilla propia (ver web/app.py: _similares_card_html).
+  // solo lo inyecta, sin plantilla propia (ver web/app.py: _similares_card_html,
+  // _ticket_solucion_html). urlSolucion es la solución/propuesta_ia de la
+  // PROPIA incidencia buscada, no de los similares (esos ya llevan la suya
+  // en su acordeón) -- petición 2026-08-28, ver MEMORIA_PROYECTO.md: antes
+  // se pedía y descartaba sin mostrarla.
   const status = document.getElementById("escaner-status");
+  const solucionDiv = document.getElementById("escaner-solucion");
   const list = document.getElementById("escaner-list");
-  const tipo = document.getElementById("esc-tipo-busqueda");
   status.textContent = "Cargando…";
+  solucionDiv.innerHTML = "";
   list.innerHTML = "";
-  tipo.hidden = true;
   const servidor = await getServidor();
   try {
-    const res = await fetchApi(url, servidor);
+    const res = await fetchApi(urlSimilares, servidor);
     if (res.status === 403) {
       status.textContent = "Este equipo no está autorizado a usar el plugin.";
       return;
@@ -331,23 +335,12 @@ async function buscarPorUrl(url, etiquetaError, resumenEstadoUrl) {
     if (!res.ok) throw new Error(String(res.status));
     status.textContent = "";
     list.innerHTML = await res.text();
-    // Aviso de si el ticket buscado tiene resumen IA -- si lo tiene,
-    // generar_embeddings.py usó ese texto (más limpio) en vez del crudo
-    // para calcular su similitud (ver MEMORIA_PROYECTO.md 2026-08-24). Solo
-    // se avisa del caso "sí" -- silencio si no lo tiene, no hace falta
-    // señalar el caso por defecto.
-    if (resumenEstadoUrl) {
-      try {
-        const r2 = await fetchApi(resumenEstadoUrl, servidor);
-        if (r2.ok) {
-          const { tiene_resumen } = await r2.json();
-          if (tiene_resumen) {
-            tipo.textContent = "Con resumen IA";
-            tipo.hidden = false;
-          }
-        }
-      } catch {}
-    }
+    // Best-effort: si falla, se queda sin ese bloque pero la lista de
+    // similares (lo principal) ya se ha mostrado igualmente.
+    try {
+      const resSol = await fetchApi(urlSolucion, servidor);
+      if (resSol.ok) solucionDiv.innerHTML = await resSol.text();
+    } catch {}
   } catch (err) {
     status.textContent = `Error conectando con el servidor (${servidor}): ${err.message}`;
   }
@@ -362,15 +355,40 @@ async function buscarPorGuid(guid) {
     if (res.ok) {
       const data = await res.json();
       document.getElementById("esc-codigo").value = data.ticket?.codigo || "";
+    } else if (res.status === 404) {
+      // Ticket todavía no sincronizado -- ingesta bajo demanda (ver
+      // MEMORIA_PROYECTO.md 2026-08-28): se encola en el servidor (sin
+      // scrapear en el momento, evita chocar con el login de
+      // auto_incremental.py/refresco_listado.py) y
+      // src/procesar_ingesta_pendiente.py la procesa por su cuenta en su
+      // propio ciclo de n8n. No se sigue a "similares" -- todavía no hay
+      // nada que mostrar para este ticket.
+      await ingestarBajoDemanda(guid);
+      return;
     }
   } catch {
     // si falla, seguimos igualmente a por los similares
   }
   return buscarPorUrl(
     `/api/incidencias/${encodeURIComponent(guid)}/similares/html`,
-    "Esta incidencia",
-    `/api/incidencias/${encodeURIComponent(guid)}/resumen-estado`
+    `/api/incidencias/${encodeURIComponent(guid)}/solucion/html`,
+    "Esta incidencia"
   );
+}
+
+async function ingestarBajoDemanda(guid) {
+  const status = document.getElementById("escaner-status");
+  const list = document.getElementById("escaner-list");
+  list.innerHTML = "";
+  const servidor = await getServidor();
+  try {
+    const res = await postApi(`/api/incidencias/${encodeURIComponent(guid)}/ingestar`, servidor, {});
+    if (!res.ok) throw new Error(String(res.status));
+    status.textContent =
+      "Estamos trabajando en incorporar esta incidencia (el gestor está ocupado) -- tu petición ha quedado en cola y estará disponible en unos minutos.";
+  } catch (err) {
+    status.textContent = `Error conectando con el servidor (${servidor}): ${err.message}`;
+  }
 }
 
 function buscarPorCodigo(codigo) {
@@ -380,8 +398,8 @@ function buscarPorCodigo(codigo) {
   }
   return buscarPorUrl(
     `/api/incidencias/por-codigo/${encodeURIComponent(codigo)}/similares/html`,
-    `"${codigo}"`,
-    `/api/incidencias/por-codigo/${encodeURIComponent(codigo)}/resumen-estado`
+    `/api/incidencias/por-codigo/${encodeURIComponent(codigo)}/solucion/html`,
+    `"${codigo}"`
   );
 }
 
@@ -395,7 +413,6 @@ async function cargarEscaner() {
     document.getElementById("escaner-status").textContent =
       "No se detectó ninguna incidencia en la página. Introduce el código y pulsa Buscar.";
     document.getElementById("escaner-list").innerHTML = "";
-    document.getElementById("esc-tipo-busqueda").hidden = true;
   }
 }
 
@@ -533,17 +550,61 @@ document.getElementById("cfg-guardar").addEventListener("click", async () => {
   document.getElementById("cfg-status").textContent = "Guardado.";
 });
 
-document.getElementById("menu").addEventListener("click", async (e) => {
-  const btnOpen = e.target.closest("button[data-open]");
+// Acción compartida por la barra de iconos (#menu) y el menú de texto
+// (#menu-texto) -- mismos data-open/data-view, dos superficies distintas
+// para llegar a lo mismo (petición 2026-08-30, ver MEMORIA_PROYECTO.md).
+// data-open-externo (accesos SAP, 2026-08-30) es de solo el menú de
+// texto por ahora, pero se maneja aquí igual por si el futuro lo pide en
+// la barra de iconos también -- chrome.tabs.create directo, SIN pasar
+// por abrirPagina()/baseUrl(): son URLs externas absolutas, no rutas de
+// nuestro propio servidor.
+function manejarClicNavegacion(target) {
+  const btnOpen = target.closest("button[data-open]");
   if (btnOpen) {
     abrirPagina(btnOpen.dataset.open);
+    return true;
+  }
+  const btnOpenExterno = target.closest("button[data-open-externo]");
+  if (btnOpenExterno) {
+    chrome.tabs.create({ url: btnOpenExterno.dataset.openExterno });
+    return true;
+  }
+  const btnView = target.closest("button[data-view]");
+  if (btnView) {
+    document.querySelectorAll("#menu button[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === btnView.dataset.view));
+    document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${btnView.dataset.view}`));
+    if (btnView.dataset.view === "escaner") cargarEscaner();
+    return true;
+  }
+  return false;
+}
+
+document.getElementById("menu").addEventListener("click", (e) => {
+  manejarClicNavegacion(e.target);
+});
+
+// Menú de texto tipo aplicación: cada palabra despliega su lista, un clic
+// fuera o en una opción lo cierra.
+const menuTexto = document.getElementById("menu-texto");
+function cerrarDropdownsMenuTexto() {
+  menuTexto.querySelectorAll(".menu-texto-dropdown").forEach((d) => { d.hidden = true; });
+  menuTexto.querySelectorAll(".menu-texto-titulo").forEach((t) => t.classList.remove("abierto"));
+}
+menuTexto.addEventListener("click", (e) => {
+  const titulo = e.target.closest(".menu-texto-titulo");
+  if (titulo) {
+    const dropdown = menuTexto.querySelector(`[data-menu-dropdown="${titulo.dataset.menu}"]`);
+    const yaAbierto = !dropdown.hidden;
+    cerrarDropdownsMenuTexto();
+    dropdown.hidden = yaAbierto;
+    titulo.classList.toggle("abierto", !yaAbierto);
     return;
   }
-  const btn = e.target.closest("button[data-view]");
-  if (!btn) return;
-  document.querySelectorAll("#menu button[data-view]").forEach((b) => b.classList.toggle("active", b === btn));
-  document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${btn.dataset.view}`));
-  if (btn.dataset.view === "escaner") cargarEscaner();
+  const manejado = manejarClicNavegacion(e.target);
+  if (manejado) cerrarDropdownsMenuTexto();
+});
+document.addEventListener("click", (e) => {
+  if (!menuTexto.contains(e.target)) cerrarDropdownsMenuTexto();
 });
 
 async function init() {
