@@ -16,6 +16,8 @@
     <button class="menu-texto-titulo" data-menu="incidencias">Incidencias</button>
     <div class="menu-texto-dropdown" data-menu-dropdown="incidencias" hidden>
       <button data-view="escaner">Escáner</button>
+      <button data-view="resolucion-ia">Resolución IA<span id="resolucion-ia-badge"></span></button>
+      <button data-view="duplicados">Posibles duplicados</button>
       <button data-open="/buscar">Buscar</button>
     </div>
   </div>
@@ -44,6 +46,7 @@
     <button class="menu-texto-titulo" data-menu="herramientas">Herramientas</button>
     <div class="menu-texto-dropdown" data-menu-dropdown="herramientas" hidden>
       <button data-view="asistente">Asistente IA</button>
+      <button data-view="huecos-conocimiento">Huecos de conocimiento</button>
       <button data-view="config">Configuración</button>
     </div>
   </div>
@@ -63,6 +66,27 @@
   <div id="escaner-status" class="status"></div>
   <div id="escaner-solucion"></div>
   <div id="escaner-list"></div>
+</div>
+
+<div id="view-resolucion-ia" class="view">
+  <div class="filtro">
+    <select id="resolucion-ia-filtro-tecnico"><option value="">Todos los técnicos</option></select>
+  </div>
+  <div id="resolucion-ia-status" class="status"></div>
+  <div id="resolucion-ia-list"></div>
+  <button id="resolucion-ia-ver-historial" class="btn-enlace">Ver historial</button>
+  <div id="resolucion-ia-historial-status" class="status" hidden></div>
+  <div id="resolucion-ia-historial-list" hidden></div>
+</div>
+
+<div id="view-duplicados" class="view">
+  <div id="duplicados-status" class="status"></div>
+  <div id="duplicados-list"></div>
+</div>
+
+<div id="view-huecos-conocimiento" class="view">
+  <div id="huecos-conocimiento-status" class="status"></div>
+  <div id="huecos-conocimiento-list"></div>
 </div>
 
 <div id="view-asistente" class="view">
