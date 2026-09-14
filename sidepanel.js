@@ -416,7 +416,151 @@ async function cargarEscaner() {
   }
 }
 
-document.getElementById("escaner-list").addEventListener("click", (e) => {
+// Patrón compartido por las vistas de "listado simple" (Resolución IA,
+// Posibles duplicados, Huecos de conocimiento -- 2026-09-01, ver
+// MEMORIA_PROYECTO.md): mismo status+list+fetch, sin el resto de lógica
+// propia del Escáner (detección de guid de página, etc.).
+async function cargarListaSimple(statusId, listId, url) {
+  const status = document.getElementById(statusId);
+  const list = document.getElementById(listId);
+  status.textContent = "Cargando…";
+  list.innerHTML = "";
+  const servidor = await getServidor();
+  try {
+    const res = await fetchApi(url, servidor);
+    if (res.status === 403) {
+      status.textContent = "Este equipo no está autorizado a usar el plugin.";
+      return;
+    }
+    if (!res.ok) throw new Error(String(res.status));
+    status.textContent = "";
+    list.innerHTML = await res.text();
+  } catch (err) {
+    status.textContent = `Error conectando con el servidor (${servidor}): ${err.message}`;
+  }
+}
+
+async function cargarDuplicados() {
+  await cargarListaSimple("duplicados-status", "duplicados-list", "/api/incidencias/posibles-duplicados/html");
+}
+
+async function cargarHuecosConocimiento() {
+  await cargarListaSimple("huecos-conocimiento-status", "huecos-conocimiento-list", "/api/incidencias/huecos-conocimiento/html");
+}
+
+async function cargarResolucionIA() {
+  const status = document.getElementById("resolucion-ia-status");
+  const list = document.getElementById("resolucion-ia-list");
+  status.textContent = "Cargando…";
+  list.innerHTML = "";
+  const servidor = await getServidor();
+  try {
+    const res = await fetchApi("/api/incidencias/con-propuesta-ia/html", servidor);
+    if (res.status === 403) {
+      status.textContent = "Este equipo no está autorizado a usar el plugin.";
+      return;
+    }
+    if (!res.ok) throw new Error(String(res.status));
+    status.textContent = "";
+    list.innerHTML = await res.text();
+    poblarFiltroTecnico();
+  } catch (err) {
+    status.textContent = `Error conectando con el servidor (${servidor}): ${err.message}`;
+  }
+}
+
+// Filtro por técnico (petición 2026-09-01, ver MEMORIA_PROYECTO.md) -- sobre
+// las tarjetas ya cargadas, sin ida y vuelta al servidor: la lista es
+// pequeña (tope de 50) y el propio HTML ya trae data-tecnico por tarjeta.
+function poblarFiltroTecnico() {
+  const select = document.getElementById("resolucion-ia-filtro-tecnico");
+  const actual = select.value;
+  const tecnicos = [...new Set(
+    [...document.querySelectorAll("#resolucion-ia-list .card")]
+      .map((c) => c.dataset.tecnico)
+      .filter(Boolean)
+  )].sort();
+  select.innerHTML = '<option value="">Todos los técnicos</option>' + tecnicos.map((t) => `<option value="${t}">${t}</option>`).join("");
+  select.value = tecnicos.includes(actual) ? actual : "";
+  aplicarFiltroTecnico();
+}
+
+function aplicarFiltroTecnico() {
+  const valor = document.getElementById("resolucion-ia-filtro-tecnico").value;
+  document.querySelectorAll("#resolucion-ia-list .card").forEach((c) => {
+    c.hidden = valor !== "" && c.dataset.tecnico !== valor;
+  });
+}
+
+document.getElementById("resolucion-ia-filtro-tecnico").addEventListener("change", aplicarFiltroTecnico);
+
+async function cargarHistorialPropuestas() {
+  await cargarListaSimple("resolucion-ia-historial-status", "resolucion-ia-historial-list", "/api/incidencias/con-propuesta-ia/historial/html");
+}
+
+document.getElementById("resolucion-ia-ver-historial").addEventListener("click", async () => {
+  const boton = document.getElementById("resolucion-ia-ver-historial");
+  const status = document.getElementById("resolucion-ia-historial-status");
+  const list = document.getElementById("resolucion-ia-historial-list");
+  const abrir = list.hidden;
+  status.hidden = !abrir;
+  list.hidden = !abrir;
+  boton.textContent = abrir ? "Ocultar historial" : "Ver historial";
+  if (abrir) await cargarHistorialPropuestas();
+});
+
+// Contador del menú ("Resolución IA (N)") -- se refresca al abrir el
+// desplegable "Incidencias" (ver menuTexto más abajo), consulta barata.
+async function actualizarBadgePropuestaIA() {
+  const servidor = await getServidor();
+  try {
+    const res = await fetchApi("/api/incidencias/con-propuesta-ia/count", servidor);
+    if (!res.ok) return;
+    const data = await res.json();
+    document.getElementById("resolucion-ia-badge").textContent = data.total > 0 ? `(${data.total})` : "";
+  } catch {}
+}
+
+// Las tres acciones de feedback de una propuesta (útil/descartar/deshacer
+// -- idea de mejora nº3, 2026-09-01, ver MEMORIA_PROYECTO.md) comparten
+// la misma secuencia de refresco: la lista de origen, el historial (por
+// si estaba abierto) y el contador del menú.
+async function _refrescarTrasFeedbackPropuesta() {
+  await cargarResolucionIA();
+  if (!document.getElementById("resolucion-ia-historial-list").hidden) await cargarHistorialPropuestas();
+  await actualizarBadgePropuestaIA();
+}
+
+async function marcarPropuestaUtil(guid) {
+  const servidor = await getServidor();
+  try {
+    await postApi(`/api/incidencias/${encodeURIComponent(guid)}/propuesta/marcar-util`, servidor, {});
+    await _refrescarTrasFeedbackPropuesta();
+  } catch {}
+}
+
+async function descartarPropuesta(guid) {
+  const servidor = await getServidor();
+  try {
+    await postApi(`/api/incidencias/${encodeURIComponent(guid)}/propuesta/descartar`, servidor, {});
+    await _refrescarTrasFeedbackPropuesta();
+  } catch {}
+}
+
+async function deshacerFeedbackPropuesta(guid) {
+  const servidor = await getServidor();
+  try {
+    await postApi(`/api/incidencias/${encodeURIComponent(guid)}/propuesta/deshacer`, servidor, {});
+    await _refrescarTrasFeedbackPropuesta();
+  } catch {}
+}
+
+// Acciones compartidas por CUALQUIER listado de tarjetas de incidencia
+// (Escáner, Asistente IA, Resolución por IA -- 2026-08-31/09-01, ver
+// MEMORIA_PROYECTO.md) -- mismas clases .btn-ia/.btn-abrir/.btn-detalle
+// en las tarjetas que genera el servidor, un solo listener reutilizado
+// en vez de repetir la misma lógica en cada contenedor.
+function manejarClicTarjeta(e) {
   const btnIa = e.target.closest(".btn-ia");
   if (btnIa) {
     const ac = document.getElementById(`ac-${btnIa.dataset.guid}`);
@@ -434,8 +578,42 @@ document.getElementById("escaner-list").addEventListener("click", (e) => {
   const btnDetalle = e.target.closest(".btn-detalle");
   if (btnDetalle) {
     abrirPagina(`/incidencias/${encodeURIComponent(btnDetalle.dataset.guid)}`);
+    return;
   }
-});
+  // Los cuatro siguientes solo existen en las tarjetas de "Resolución
+  // IA" -- inofensivo tenerlos aquí para Escáner/Asistente, nunca hacen
+  // match (2026-08-31/09-01, ver MEMORIA_PROYECTO.md).
+  const btnUtil = e.target.closest(".btn-util");
+  if (btnUtil) {
+    marcarPropuestaUtil(btnUtil.dataset.guid);
+    return;
+  }
+  const btnCopiar = e.target.closest(".btn-copiar");
+  if (btnCopiar) {
+    const texto = btnCopiar.closest(".card")?.querySelector("[data-propuesta-texto]")?.textContent || "";
+    navigator.clipboard.writeText(texto).then(() => {
+      const original = btnCopiar.innerHTML;
+      btnCopiar.innerHTML = "&#9989;";
+      setTimeout(() => { btnCopiar.innerHTML = original; }, 1200);
+    });
+    return;
+  }
+  const btnDescartar = e.target.closest(".btn-descartar");
+  if (btnDescartar) {
+    descartarPropuesta(btnDescartar.dataset.guid);
+    return;
+  }
+  const btnDeshacer = e.target.closest(".btn-deshacer");
+  if (btnDeshacer) {
+    deshacerFeedbackPropuesta(btnDeshacer.dataset.guid);
+  }
+}
+
+document.getElementById("escaner-list").addEventListener("click", manejarClicTarjeta);
+document.getElementById("resolucion-ia-list").addEventListener("click", manejarClicTarjeta);
+document.getElementById("resolucion-ia-historial-list").addEventListener("click", manejarClicTarjeta);
+document.getElementById("duplicados-list").addEventListener("click", manejarClicTarjeta);
+document.getElementById("huecos-conocimiento-list").addEventListener("click", manejarClicTarjeta);
 
 document.getElementById("esc-buscar").addEventListener("click", () => {
   buscarPorCodigo(document.getElementById("esc-codigo").value.trim());
@@ -516,26 +694,7 @@ async function preguntarAsistente() {
 }
 document.getElementById("ast-buscar").addEventListener("click", preguntarAsistente);
 
-document.getElementById("ast-similares-list").addEventListener("click", (e) => {
-  const btnIa = e.target.closest(".btn-ia");
-  if (btnIa) {
-    const ac = document.getElementById(`ac-${btnIa.dataset.guid}`);
-    ac.hidden = !ac.hidden;
-    return;
-  }
-  const btnAbrir = e.target.closest(".btn-abrir");
-  if (btnAbrir) {
-    const base = ultimaBaseProactivaNet || PROACTIVA_BASE_FALLBACK;
-    chrome.tabs.create({
-      url: `${base}servicedesk/incidents/formIncidents/formIncidents.paw?pawData=id%3D${btnAbrir.dataset.guid}`,
-    });
-    return;
-  }
-  const btnDetalle = e.target.closest(".btn-detalle");
-  if (btnDetalle) {
-    abrirPagina(`/incidencias/${encodeURIComponent(btnDetalle.dataset.guid)}`);
-  }
-});
+document.getElementById("ast-similares-list").addEventListener("click", manejarClicTarjeta);
 
 document.getElementById("cfg-guardar").addEventListener("click", async () => {
   const servidor = document.getElementById("cfg-servidor").value.trim();
@@ -574,6 +733,9 @@ function manejarClicNavegacion(target) {
     document.querySelectorAll("#menu button[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === btnView.dataset.view));
     document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${btnView.dataset.view}`));
     if (btnView.dataset.view === "escaner") cargarEscaner();
+    if (btnView.dataset.view === "resolucion-ia") cargarResolucionIA();
+    if (btnView.dataset.view === "duplicados") cargarDuplicados();
+    if (btnView.dataset.view === "huecos-conocimiento") cargarHuecosConocimiento();
     return true;
   }
   return false;
@@ -598,6 +760,10 @@ menuTexto.addEventListener("click", (e) => {
     cerrarDropdownsMenuTexto();
     dropdown.hidden = yaAbierto;
     titulo.classList.toggle("abierto", !yaAbierto);
+    // Contador de "Resolución por IA" al abrir -- 2026-09-01, ver
+    // MEMORIA_PROYECTO.md: se refresca justo al desplegar, no por sondeo
+    // en segundo plano.
+    if (!yaAbierto && titulo.dataset.menu === "incidencias") actualizarBadgePropuestaIA();
     return;
   }
   const manejado = manejarClicNavegacion(e.target);
@@ -620,6 +786,7 @@ async function init() {
   document.getElementById("cfg-version").textContent = `Versión instalada: ${chrome.runtime.getManifest().version}`;
   comprobarVersion();
   cargarEscaner();
+  actualizarBadgePropuestaIA();
   chrome.tabs.onActivated.addListener(() => cargarEscaner());
   chrome.tabs.onUpdated.addListener((tabId, info) => {
     if (info.status === "complete") cargarEscaner();
