@@ -62,6 +62,22 @@ body {
   font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--sub); background: transparent;
   border: 1px solid var(--line); padding: 0 12px; cursor: pointer;
 }
+.filtro select {
+  flex: 1 1 auto; height: 36px; box-sizing: border-box; padding: 0 8px; background: var(--surface);
+  border: 1px solid var(--line); color: var(--ink); font: inherit;
+}
+.btn-enlace {
+  display: block; margin: 4px 0 10px; background: transparent; border: none; color: var(--sub);
+  font-family: 'IBM Plex Mono', monospace; font-size: 11px; text-decoration: underline; cursor: pointer; padding: 0;
+}
+.btn-enlace:hover { color: var(--amber); }
+#resolucion-ia-badge { font-size: 10px; color: var(--amber); margin-left: 3px; }
+.dup-par { display: flex; gap: 10px; }
+.dup-ticket { flex: 1 1 0; min-width: 0; border-left: 1px solid var(--line); padding-left: 10px; }
+.dup-ticket:first-child { border-left: none; padding-left: 0; }
+.dup-ticket .tit { font-size: 12.5px; margin: 4px 0 8px; }
+.etiqueta-feedback { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--sub); flex: 1 1 auto; align-self: center; }
+.menu-texto-dropdown button:hover #resolucion-ia-badge { color: inherit; }
 .card { background: var(--surface); border: 1px solid var(--line); padding: 10px; margin-bottom: 8px; }
 .card-head { display: flex; justify-content: space-between; align-items: center; }
 .cod { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--sub); }
